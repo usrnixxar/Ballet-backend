@@ -36,3 +36,10 @@ CREATE TABLE IF NOT EXISTS visitor_sessions (
  last_seen timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS visitors_last_seen_idx ON visitor_sessions(last_seen);
+
+-- Tables are accessed only via the trusted backend PostgreSQL connection.
+ALTER TABLE public.candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.visitor_sessions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.candidates,public.votes,public.email_codes,public.visitor_sessions FROM anon,authenticated;
