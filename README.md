@@ -17,7 +17,7 @@ This is an independent, unofficial public-opinion poll — **not** an official e
 3. Configure all environment variables from `.env.example` on your API host; use a separate strong `JWT_SECRET`.
 4. Configure SMTP for OTP verification. Without SMTP, real voting returns a configuration error and does not accept unverified votes.
 5. Run `npm install && npm start` on a persistent Node host.
-6. Admin interface is served from `/admin` on the same API origin. Log in with the private ADMIN_EMAIL/ADMIN_PASSWORD environment values.
+6. Admin interface is served from `/admin` on the same API origin. Log in with the private ADMIN_USERNAME/ADMIN_PASSWORD environment values.
 7. Configure frontend `VITE_API_URL` to the HTTPS API origin to switch from demo data to this backend (frontend integration in the Ballot-Paper repo).
 8. Keep HTTPS enabled. No service-role/database secrets in client-side code.
 
@@ -40,3 +40,6 @@ POST /api/admin/candidates/:id/image (base64-encoded PNG/JPEG/WebP, capped)
 DELETE /api/admin/candidates/:id/image
 
 The candidate image endpoint returns a public image resource, keeping public data independent from internal database rows.
+
+## Admin ID / password configuration
+Use a private environment variable `ADMIN_USERNAME=bjp` and set `ADMIN_PASSWORD` as a **sensitive** environment variable in the backend host. Do not commit the actual password or store it in frontend code. `ADMIN_EMAIL` can be used instead for an email login identifier if `ADMIN_USERNAME` is not supplied. Admin sign-in is mandatory for private dashboard APIs.
