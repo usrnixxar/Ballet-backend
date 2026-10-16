@@ -62,3 +62,10 @@ The candidate image endpoint returns a public image resource, keeping public dat
 
 ## Admin ID / password configuration
 Use a private environment variable `ADMIN_USERNAME=bjp` and set `ADMIN_PASSWORD` as a **sensitive** environment variable in the backend host. Do not commit the actual password or store it in frontend code. `ADMIN_EMAIL` can be used instead for an email login identifier if `ADMIN_USERNAME` is not supplied. Admin sign-in is mandatory for private dashboard APIs.
+
+## Music Manager
+The authenticated `/admin` dashboard includes a background music volume slider (0–100%), a player preview and a private audio upload form. The volume is stored in the Supabase `poll_audio_settings` table through the protected `ballot-admin-bridge` function. The public frontend polls `poll_audio_config()` every 30 seconds and adjusts playback volume without affecting the stamp sound.
+
+To activate uploading from the panel straight into the **ballet-paper-live** GitHub repository, create a fine-grained GitHub personal access token (not a classic all-repos token) with **Contents: Read and write** limited to `usrnixxar/ballet-paper-live`. Add it as `BALLOT_GITHUB_CONTENTS_TOKEN` to the **backend** Vercel project's encrypted Production environment variables and redeploy. Never paste this token in chat, commit it, or expose it to frontend JS. The server verifies admin login and validates file size (max 2 MB) and MP3/M4A/OGG/WAV magic bytes before it calls GitHub Contents API to publish `public/audio/background.<extension>`. The GitHub main-branch commit starts Vercel's frontend Git deployment if its integration is enabled, and audio is live after deployment finishes. The settings API updates the selected track for visitors.
+
+Music playback still follows browser autoplay rules: browsers can require a visitor to tap before sound plays. The upload action returns an explicit configuration error until the private token is supplied.
