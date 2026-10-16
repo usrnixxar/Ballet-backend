@@ -30,14 +30,37 @@ const email=s=>s.trim().toLowerCase();
 const secret=process.env.JWT_SECRET;
 const adminId=(process.env.ADMIN_EMAIL || process.env.ADMIN_USERNAME || '').trim().toLowerCase();
 let hashedAdminPassword;
-function ready(){return !!(secret&&secret.length>=32&&adminId&&process.env.ADMIN_PASSWORD?.length>=12&&process.env.DATABASE_URL);}
+const BRIDGE_URL=process.env.BALLOT_ADMIN_BRIDGE_URL;
+const BRIDGE_KEY=process.env.BALLOT_ADMIN_BRIDGE_KEY;
+const ANON_JWT=process.env.SUPABASE_ANON_JWT;
+const usingBridge=Boolean(BRIDGE_URL&&BRIDGE_KEY&&ANON_JWT);
+function ready(){return !!(secret&&secret.length>=32&&adminId&&process.env.ADMIN_PASSWORD?.length>=12&&(process.env.DATABASE_URL||usingBridge));}
 if(ready())hashedAdminPassword=bcrypt.hashSync(process.env.ADMIN_PASSWORD,12);
 function requireAdmin(req,res,next){try{const token=req.cookies?.admin_session;if(!token)throw Error('No session');const claims=jwt.verify(token,secret,{algorithms:['HS256']});if(claims.role!=='admin'||claims.sub!==adminId)throw Error('Forbidden');next();}catch{res.status(401).json({error:'Admin login required'});}}
 function age(dob){const [y,m,d]=dob.split('-').map(Number);const date=new Date(Date.UTC(y,m-1,d));if(date.getUTCFullYear()!==y||date.getUTCMonth()!==m-1||date.getUTCDate()!==d)return -1;const now=new Date();let yrs=now.getUTCFullYear()-y;if(now.getUTCMonth()+1<m||(now.getUTCMonth()+1===m&&now.getUTCDate()<d))yrs--;return date>now?-1:yrs;}
 const voterSchema=z.object({name:z.string().trim().min(2).max(120),email:z.string().email().max(254),dob:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)});
 const candidateFields=z.object({name:z.string().trim().min(1).max(100),color:z.string().regex(/^#[a-fA-F0-9]{6}$/),symbol:z.enum(['star','book','tree','lamp','wheel'])});
 const daySeries=rows=>rows.map(r=>({day:r.day,count:Number(r.count)}));
-app.get('/api/health',wrap(async(req,res)=>{const config={database:!!process.env.DATABASE_URL,adminId:!!adminId,adminPassword:(process.env.ADMIN_PASSWORD?.length||0)>=12,jwtSecret:(secret?.length||0)>=32,smtp:!!mailer};let databaseConnected=false;if(config.database){try{await db.query('select 1');databaseConnected=true;}catch(e){console.error('Database connection failed:',e.code||e.message);}}res.status(databaseConnected&&ready()?200:503).json({ok:databaseConnected&&ready(),databaseConnected,configuration:config});}));
+async function bridgeRequest(action,payload={}){
+ if(!usingBridge)throw Error('Admin bridge not configured');
+ const response=await fetch(BRIDGE_URL,{
+  method:'POST',
+  headers:{'Content-Type':'application/json','apikey':ANON_JWT,'Authorization':'Bearer '+ANON_JWT,'x-admin-bridge-key':BRIDGE_KEY},
+  body:JSON.stringify({action,payload}),
+  signal:AbortSignal.timeout(13000)
+ });
+ const data=await response.json().catch(()=>({error:'Bridge response not valid'}));
+ if(!response.ok){console.error('Admin bridge rejected action',action,response.status);throw Object.assign(new Error(data.error||'Admin data unavailable'),{status:response.status});}
+ return data;
+}
+app.get('/api/health',wrap(async(req,res)=>{
+ const config={database:!!process.env.DATABASE_URL,adminEmail:!!adminId,adminPassword:(process.env.ADMIN_PASSWORD?.length||0)>=12,jwtSecret:(secret?.length||0)>=32,smtp:!!mailer,bridgeConfigured:usingBridge};
+ let databaseConnected=false,bridgeConnected=false;
+ if(config.database){try{await db.query('select 1');databaseConnected=true;}catch(e){console.error('Database connect failed:',e.code||e.message);}}
+ if(usingBridge){try{const result=await bridgeRequest('stats');bridgeConnected=Number.isFinite(result.totalVotes);}catch(e){console.error('Bridge health check failed:',e.message);}}
+ const ok=ready()&&(databaseConnected||bridgeConnected);
+ res.status(ok?200:503).json({ok,databaseConnected,bridgeConnected,configuration:config});
+}));
 app.get('/api/public/candidates',wrap(async(req,res)=>{const {rows}=await db.query('select id,name,short_name,symbol,color,image_url,(image_data is not null) as has_image from candidates order by id');res.set('Cache-Control','no-store').json(rows.map(r=>({id:r.id,name:r.name,shortName:r.short_name||r.name,symbol:r.symbol,color:r.color,imageUrl:r.has_image?'/api/public/candidates/'+r.id+'/image':r.image_url})));}));
 app.get('/api/public/candidates/:id/image',wrap(async(req,res)=>{const id=Number(req.params.id);if(!Number.isInteger(id))return res.sendStatus(404);const {rows}=await db.query('select image_data,image_mime from candidates where id=$1',[id]);if(!rows[0]?.image_data)return res.sendStatus(404);res.type(rows[0].image_mime).set('Cache-Control','public,max-age=120').send(rows[0].image_data);}));
 app.get('/api/public/results',wrap(async(req,res)=>{const [totals,days]=await Promise.all([db.query('select candidate_id,count(*)::int as votes from votes group by candidate_id'),db.query("select to_char(cast_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD') as day,count(*)::int as count from votes group by 1 order by 1")]);res.set('Cache-Control','no-store').json({counts:Object.fromEntries(totals.rows.map(r=>[r.candidate_id,r.votes])),daily:daySeries(days.rows),total:totals.rows.reduce((n,r)=>n+r.votes,0)});}));
@@ -48,6 +71,28 @@ app.post('/api/vote/confirm',sensitiveLimiter,wrap(async(req,res)=>{const schema
 app.post('/api/admin/login',sensitiveLimiter,wrap(async(req,res)=>{if(!ready())return res.status(503).json({error:'Admin is not configured'});const parsed=z.object({email:z.string().email().max(254),password:z.string().min(1).max(200)}).safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'Invalid credentials'});const good=parsed.data.email.trim().toLowerCase()===adminId&&await bcrypt.compare(parsed.data.password,hashedAdminPassword);if(!good)return res.status(401).json({error:'Incorrect admin ID or password'});const token=jwt.sign({role:'admin'},secret,{algorithm:'HS256',subject:adminId,expiresIn:'8h'});res.cookie('admin_session',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/admin',maxAge:8*3600000});res.json({ok:true});}));
 app.post('/api/admin/logout',requireAdmin,(req,res)=>{res.clearCookie('admin_session',{path:'/api/admin'}).json({ok:true});});
 app.get('/api/admin/me',requireAdmin,(req,res)=>res.json({email:adminId}));
+
+// In bridge mode, private reads and edits go through Supabase's service-role Edge Function.
+// Only authenticated admin sessions may reach this middleware.
+app.use('/api/admin',requireAdmin,wrap(async(req,res,next)=>{
+ if(!usingBridge)return next();
+ let action=null,payload={};
+ if(req.method==='GET'&&req.path==='/stats')action='stats';
+ else if(req.method==='GET'&&req.path==='/votes'){action='votes';payload={page:Number(req.query.page)||1};}
+ else if(req.method==='GET'&&req.path==='/candidates')action='candidates';
+ else {
+  const m=req.path.match(/^\/candidates\/(\d+)(\/image)?$/);
+  if(m){const id=Number(m[1]);
+   if(req.method==='PUT'&&!m[2]){action='updateCandidate';payload={id,...req.body};}
+   else if(req.method==='POST'&&m[2]){action='uploadImage';payload={id,...req.body};}
+   else if(req.method==='DELETE'&&m[2]){action='removeImage';payload={id};}
+  }
+ }
+ if(!action)return next();
+ try{res.set('Cache-Control','no-store').json(await bridgeRequest(action,payload));}
+ catch(e){res.status(e.status===401?502:e.status||502).json({error:e.message||'Admin data temporarily unavailable'});}
+}));
+
 app.get('/api/admin/stats',requireAdmin,wrap(async(req,res)=>{const [visits,live,today,votes]=await Promise.all([db.query('select count(*)::int as n from visitor_sessions'),db.query("select count(*)::int as n from visitor_sessions where last_seen>now()-interval '5 minutes'"),db.query("select count(*)::int as n from votes where cast_at >= date_trunc('day',now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'"),db.query('select count(*)::int as n from votes')]);res.json({totalVisitors:visits.rows[0].n,onlineVisitors:live.rows[0].n,todayVotes:today.rows[0].n,totalVotes:votes.rows[0].n});}));
 app.get('/api/admin/votes',requireAdmin,wrap(async(req,res)=>{const page=Math.max(1,Math.min(100000,parseInt(req.query.page)||1));const q=await db.query('select v.id,v.voter_name as name,v.voter_email as email,v.voter_dob as dob,v.candidate_id as "candidateId",c.name as candidate,v.cast_at as "castAt" from votes v join candidates c on v.candidate_id=c.id order by v.cast_at desc limit 100 offset $1',[(page-1)*100]);res.set('Cache-Control','no-store').json(q.rows.map(r=>({...r,ageAtVote:age(r.dob.toISOString().slice(0,10))})));}));
 app.put('/api/admin/candidates/:id',requireAdmin,wrap(async(req,res)=>{const p=candidateFields.safeParse(req.body);const id=Number(req.params.id);if(!p.success||!Number.isInteger(id)||id<1||id>5)return res.status(400).json({error:'Invalid candidate'});const c=p.data;await db.query('update candidates set name=$1,symbol=$2,color=$3,updated_at=now() where id=$4',[c.name,c.symbol,c.color,id]);res.json({ok:true});}));
