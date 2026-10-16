@@ -19,7 +19,27 @@ const db = new pg.Pool({connectionString:process.env.DATABASE_URL, max:8, ssl:pr
 const port=Number(process.env.PORT||4000);
 const allowed=[process.env.FRONTEND_ORIGIN,process.env.ADMIN_ORIGIN,process.env.API_PUBLIC_ORIGIN].filter(Boolean);
 app.use(helmet({contentSecurityPolicy:false}));
-app.use(cors({origin(origin,cb){if(!origin || allowed.includes(origin))cb(null,true);else cb(new Error('CORS denied'));},credentials:true}));
+// Browsers include an Origin header on same-origin POST requests (including admin login).
+// Validate the origin against the current host or explicitly configured frontend origins.
+function trustedOrigin(req){
+ const origin=req.headers.origin;
+ if(!origin)return true;
+ if(allowed.includes(origin))return true;
+ try{
+  const parsed=new URL(origin);
+  const host=String(req.headers.host||'').toLowerCase();
+  const proto=req.protocol;
+  if(parsed.host.toLowerCase()===host && parsed.protocol===proto+':')return true;
+  const forwardedHost=String(req.headers['x-forwarded-host']||'').split(',')[0].trim().toLowerCase();
+  const forwardedProto=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim().toLowerCase();
+  return Boolean(forwardedHost&&parsed.host.toLowerCase()===forwardedHost&&parsed.protocol===forwardedProto+':');
+ }catch{return false;}
+}
+app.use((req,res,next)=>{
+ if(!trustedOrigin(req))return res.status(403).json({error:'Request origin not allowed',code:'ORIGIN_NOT_ALLOWED'});
+ next();
+});
+app.use(cors({origin:true,credentials:true}));
 app.use(cookieParser());
 app.use(express.json({limit:'2mb'}));
 const limiter=rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false});
