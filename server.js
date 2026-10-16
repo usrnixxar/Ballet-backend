@@ -41,7 +41,7 @@ app.use((req,res,next)=>{
 });
 app.use(cors({origin:true,credentials:true}));
 app.use(cookieParser());
-app.use(express.json({limit:'2mb'}));
+app.use(express.json({limit:'3.5mb'}));
 const limiter=rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false});
 const sensitiveLimiter=rateLimit({windowMs:15*60*1000,limit:12,standardHeaders:'draft-7',legacyHeaders:false});
 app.use('/api',limiter);
@@ -74,7 +74,7 @@ async function bridgeRequest(action,payload={}){
  return data;
 }
 app.get('/api/health',wrap(async(req,res)=>{
- const config={database:!!process.env.DATABASE_URL,adminEmail:!!adminId,adminPassword:(process.env.ADMIN_PASSWORD?.length||0)>=12,jwtSecret:(secret?.length||0)>=32,smtp:!!mailer,bridgeConfigured:usingBridge};
+ const config={database:!!process.env.DATABASE_URL,adminEmail:!!adminId,adminPassword:(process.env.ADMIN_PASSWORD?.length||0)>=12,jwtSecret:(secret?.length||0)>=32,smtp:!!mailer,bridgeConfigured:usingBridge,githubMusicUploadReady:!!process.env.BALLOT_GITHUB_CONTENTS_TOKEN};
  let databaseConnected=false,bridgeConnected=false;
  if(config.database){try{await db.query('select 1');databaseConnected=true;}catch(e){console.error('Database connect failed:',e.code||e.message);}}
  if(usingBridge){try{const result=await bridgeRequest('stats');bridgeConnected=Number.isFinite(result.totalVotes);}catch(e){console.error('Bridge health check failed:',e.message);}}
@@ -91,6 +91,59 @@ app.post('/api/vote/confirm',sensitiveLimiter,wrap(async(req,res)=>{const schema
 app.post('/api/admin/login',sensitiveLimiter,wrap(async(req,res)=>{if(!ready())return res.status(503).json({error:'Admin is not configured'});const parsed=z.object({email:z.string().email().max(254),password:z.string().min(1).max(200)}).safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'Invalid credentials'});const good=parsed.data.email.trim().toLowerCase()===adminId&&await bcrypt.compare(parsed.data.password,hashedAdminPassword);if(!good)return res.status(401).json({error:'Incorrect admin ID or password'});const token=jwt.sign({role:'admin'},secret,{algorithm:'HS256',subject:adminId,expiresIn:'8h'});res.cookie('admin_session',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/api/admin',maxAge:8*3600000});res.json({ok:true});}));
 app.post('/api/admin/logout',requireAdmin,(req,res)=>{res.clearCookie('admin_session',{path:'/api/admin'}).json({ok:true});});
 app.get('/api/admin/me',requireAdmin,(req,res)=>res.json({email:adminId}));
+
+const MUSIC_REPO="usrnixxar/ballet-paper-live";
+const MUSIC_BRANCH="main";
+// Use a fine-grained GitHub token with only Contents: Read & Write on MUSIC_REPO.
+const musicGithubToken=process.env.BALLOT_GITHUB_CONTENTS_TOKEN||"";
+async function githubPutMusic(path,base64){
+ if(!musicGithubToken)throw Object.assign(new Error('GitHub upload not configured. Set BALLOT_GITHUB_CONTENTS_TOKEN in Vercel.'),{status:503});
+ const endpoint='https://api.github.com/repos/'+MUSIC_REPO+'/contents/'+path;
+ const headers={'Authorization':'Bearer '+musicGithubToken,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'};
+ const old=await fetch(endpoint+'?ref='+MUSIC_BRANCH,{headers,signal:AbortSignal.timeout(20000)});
+ let sha;
+ if(old.status===200){const data=await old.json();sha=data.sha;}
+ else if(old.status!==404){console.error('GitHub metadata lookup failed',old.status);throw Object.assign(new Error('Cannot access GitHub music repository. Check token permissions.'),{status:502});}
+ const response=await fetch(endpoint,{method:'PUT',headers,signal:AbortSignal.timeout(30000),body:JSON.stringify({
+  message:'Update public ballot background music via authenticated admin panel',
+  content:base64,branch:MUSIC_BRANCH,...(sha?{sha}:{})
+ })});
+ if(!response.ok){console.error('GitHub music upload failed',response.status);throw Object.assign(new Error(response.status===401||response.status===403?'GitHub upload permission denied. Check the private token.':'GitHub could not save the audio file.'),{status:502});}
+ const body=await response.json();
+ return {commit:body.commit?.sha||null};
+}
+app.get('/api/admin/music',requireAdmin,wrap(async(req,res)=>{
+ const data=await bridgeRequest('audioSettings');
+ res.set('Cache-Control','no-store').json({...data,githubUploadReady:Boolean(musicGithubToken)});
+}));
+app.put('/api/admin/music',requireAdmin,sensitiveLimiter,wrap(async(req,res)=>{
+ const p=z.object({volume:z.number().int().min(0).max(100)}).safeParse(req.body);
+ if(!p.success)return res.status(400).json({error:'Select a volume from 0 to 100'});
+ res.set('Cache-Control','no-store').json(await bridgeRequest('setAudioSettings',{volume:p.data.volume}));
+}));
+app.post('/api/admin/music/upload',requireAdmin,sensitiveLimiter,wrap(async(req,res)=>{
+ const p=z.object({fileName:z.string().min(1).max(160),mime:z.string().min(3).max(80),base64:z.string().min(100).max(3100000)}).safeParse(req.body);
+ if(!p.success)return res.status(400).json({error:'Select one supported audio file under 2 MB'});
+ const ext=p.data.fileName.toLowerCase().split('.').pop();
+ const types={mp3:['audio/mpeg','audio/mp3'],m4a:['audio/mp4','audio/x-m4a'],ogg:['audio/ogg'],wav:['audio/wav','audio/x-wav','audio/wave']};
+ if(!Object.prototype.hasOwnProperty.call(types,ext)||!types[ext].includes(p.data.mime))return res.status(400).json({error:'Supported formats: MP3, M4A, OGG or WAV'});
+ if(!/^[A-Za-z0-9+/]*={0,2}$/.test(p.data.base64))return res.status(400).json({error:'Invalid audio file encoding'});
+ const buffer=Buffer.from(p.data.base64,'base64');
+ if(buffer.length>2*1024*1024||buffer.length<64)return res.status(413).json({error:'Audio must be between 64 bytes and 2 MB'});
+ const mp3=buffer.toString('ascii',0,3)==='ID3'||(buffer[0]===255&&(buffer[1]&224)===224);
+ const m4a=buffer.toString('ascii',4,8)==='ftyp';
+ const ogg=buffer.toString('ascii',0,4)==='OggS';
+ const wav=buffer.toString('ascii',0,4)==='RIFF'&&buffer.toString('ascii',8,12)==='WAVE';
+ if(!({mp3,m4a,ogg,wav})[ext])return res.status(400).json({error:'Audio file signature does not match its type'});
+ const path='public/audio/background.'+ext,publicSrc='/audio/background.'+ext;
+ const result=await githubPutMusic(path,p.data.base64);
+ // The GitHub push triggers the hosting integration; Supabase announces the volume and source to browsers.
+ let updated;
+ try{const audio=await bridgeRequest('audioSettings');updated=await bridgeRequest('setAudioSettings',{src:publicSrc,volume:audio.volume});}
+ catch(e){console.error('Audio was committed but config update failed',e.message);return res.status(502).json({error:'Music uploaded to GitHub, but live settings could not be updated. Retry saving volume.',commit:result.commit});}
+ res.json({ok:true,commit:result.commit,src:publicSrc,volume:updated.volume,note:'GitHub committed. Audio becomes playable after Vercel finishes deploying the new commit.'});
+}));
+
 
 // In bridge mode, private reads and edits go through Supabase's service-role Edge Function.
 // Only authenticated admin sessions may reach this middleware.
