@@ -1,5 +1,24 @@
 # Ballet Backend — Independent Polling Platform
 
+## Live admin deployment (October 2026)
+The production admin panel is at https://ballet-backend.vercel.app/admin.
+Admin email/password and JWT signing key must be stored only as private Vercel environment variables.
+The production deployment can read and edit the **Ballot Paper** Supabase database using a
+private, server-to-server Supabase Edge Function named `ballot-admin-bridge`.
+
+When `BALLOT_ADMIN_BRIDGE_URL`, `BALLOT_ADMIN_BRIDGE_KEY` and `SUPABASE_ANON_JWT` are set,
+the admin panel works **without** `DATABASE_URL`; the Edge Function uses its server-side
+Supabase credentials to read protected tables. Neither the signing key nor bridge token is
+ever included in the browser or committed to GitHub.
+
+Use `/api/health` to inspect nonsecret setup and connectivity flags (`bridgeConnected`).
+The `/api/admin/*` dashboard data routes require the HTTP-only admin session.
+
+**Important:** The current `ballet-paper-live` public frontend uses its own direct
+Supabase polling RPCs, not this backend's email-OTP endpoints. The direct frontend mode
+uses self-reported DOB and an unverified email. Treat it as an **unofficial public
+opinion demo**, not identity-verified or official election voting.
+
 Separate Express/PostgreSQL backend and responsive admin panel for [Ballot-Paper](https://github.com/usrnixxar/Ballot-Paper).
 
 ## Security and scope
