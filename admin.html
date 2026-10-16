@@ -1,9 +1,40 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ballot Admin Console</title><style>
 *{box-sizing:border-box}body{font-family:Inter,system-ui,sans-serif;background:#f2f6fc;margin:0;color:#203456}header{background:linear-gradient(95deg,#ffe5c5,#fff,#dcf4df);border-bottom:3px solid #188635;padding:18px 28px}header h1{margin:0;font-size:25px}header p{margin:4px 0;color:#5d6980}main{max-width:1250px;padding:24px;margin:auto}.hide{display:none!important}.panel{background:white;border:1px solid #e0e8f3;border-radius:15px;padding:20px;box-shadow:0 8px 30px #2e5b9b0c;margin-bottom:19px}.login{max-width:450px;margin:8vh auto}h2{margin:0 0 18px;font-size:19px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 7px}input,select{width:100%;border:1px solid #bacbe2;border-radius:9px;padding:11px;font:inherit;background:#fff}button{font:inherit;font-weight:700;border:0;border-radius:9px;padding:11px 17px;cursor:pointer;background:#225be2;color:white}button.alt{background:#eaf0fb;color:#234579}button.danger{background:#c33546}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{border:1px solid #e5ebf7;border-radius:12px;padding:17px;background:#fbfdff}.metric b{font-size:28px;display:block}.metric small{font-size:12px;color:#647089}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.candidates{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px}.candidate{border:1px solid #e0e8f3;border-radius:13px;padding:12px;background:#fbfdff;min-width:0}.candidate img{display:block;object-fit:contain;max-width:100%;height:85px;margin:0 auto}.candidate .icon{height:85px;display:grid;place-items:center;font-size:43px}.candidate button{margin:8px 0 0;width:100%;font-size:12px}.candidate input{padding:8px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:11px;border-bottom:1px solid #e7ecf5;white-space:nowrap}th{background:#eef4fc}.scroll{overflow-x:auto;max-width:100%}.muted{color:#687792;font-size:12px}.status{color:#ac293a;min-height:20px}.pagination{display:flex;gap:8px;align-items:center;margin-top:12px}#adminArea{display:grid;gap:0}@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.candidates{grid-template-columns:repeat(2,1fr)}}@media(max-width:480px){main{padding:11px}header{padding:13px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.candidates{grid-template-columns:1fr 1fr}.panel{padding:13px}button{padding:10px}header h1{font-size:20px}}
+
+/* Music manager: separate, clear controls for live volume and publishing. */
+.music-card{border:1px solid #dbe6f5;background:linear-gradient(135deg,#f7fbff 0%,#fefdf7 100%);border-radius:16px;padding:19px}
+.music-top{display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.music-art{width:55px;height:55px;border-radius:15px;background:linear-gradient(135deg,#194bb2,#18a3b5);display:grid;place-items:center;color:#fff;font-size:28px;box-shadow:0 8px 18px #265aa735}
+.music-intro{display:flex;align-items:center;gap:13px}
+.music-intro b{display:block;font-size:16px}.music-intro small{display:block;margin-top:5px;color:#677994}
+.music-badge{display:inline-flex;padding:6px 10px;border-radius:30px;font-size:11px;font-weight:750;color:#116345;background:#e3f9ef}
+.music-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.music-group{border:1px solid #e0e9f8;background:#fff;border-radius:13px;padding:17px}
+.music-group h3{margin:0 0 7px;font-size:15px}
+.music-group p{font-size:12px;line-height:1.5;color:#697c94;margin:5px 0 14px}
+.music-value{font-size:30px;font-weight:900;color:#1854a9}
+.music-range{width:100%;accent-color:#2873e4;margin:14px 0}
+.music-range-ticks{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#70809c;margin-bottom:13px}
+.music-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.music-controls button{min-width:135px}
+.music-group audio{width:100%;margin:12px 0}
+.music-file-input{border:1px dashed #a9beda;background:#f8fbff}
+.music-hint{min-height:30px;line-height:1.5;font-size:12px;color:#2a6c55;margin-top:10px}
+.music-hint.error{color:#aa3542}
+button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:750px){.music-grid{grid-template-columns:1fr}.music-card{padding:13px}.music-top{align-items:flex-start}}
 </style></head><body><header><h1>🗳️ Ballot Paper — Admin Console</h1><p>Independent public-opinion poll management · Admin only</p></header><main>
 <section id="loginArea" class="panel login"><h2>Secure Admin Login</h2><form id="loginForm"><label>Admin Email</label><input name="email" type="email" required autocomplete="username" placeholder="Enter admin email"><label>Password</label><input name="password" type="password" required autocomplete="current-password" placeholder="Password"><button style="width:100%;margin-top:16px">Log In</button></form><p class="muted">Admin credentials are configured on the server, never in the website's GitHub source.</p><p id="loginError" class="status"></p></section>
 <div id="adminArea" class="hide"><section class="panel toolbar"><div><b id="adminName">Administrator</b><div class="muted">Auto-refresh every 15 seconds</div></div><button class="alt" id="logout">Log Out</button></section>
 <section class="panel"><h2>Live Analytics</h2><div class="grid"><div class="metric"><b id="online">—</b><small>Online visitors (last 5 min)</small></div><div class="metric"><b id="visitors">—</b><small>Total browser visitors</small></div><div class="metric"><b id="votes">—</b><small>Total verified votes</small></div><div class="metric"><b id="today">—</b><small>Votes today (India)</small></div></div></section>
+<section class="panel" id="musicManager">
+<div class="toolbar"><div><h2 style="margin-bottom:5px">Background Music Manager</h2><p class="muted">Set the music loudness for everyone and publish new tracks from the Admin Panel.</p></div><span class="music-badge">Live Audio Settings</span></div>
+<div class="music-card"><div class="music-top"><div class="music-intro"><div class="music-art" aria-hidden="true">♫</div><div><b id="activeMusicName">Background Music</b><small id="musicInfo">Loading saved music settings...</small></div></div></div>
+<div class="music-grid">
+<div class="music-group"><h3>🔉 Music Volume</h3><p>Adjust the background music. Stamp sound remains separate.</p><div class="music-value" id="volumeValue">35%</div><input type="range" class="music-range" id="musicVolume" min="0" max="100" value="35" aria-label="Background music volume"><div class="music-range-ticks"><span>Mute · 0%</span><span>Normal · 50%</span><span>High · 100%</span></div><div class="music-controls"><button id="saveMusicVolume" type="button">Save Volume</button></div></div>
+<div class="music-group"><h3>🎵 Upload New Music</h3><p>MP3 recommended. MP3, M4A, OGG, WAV up to 2 MB. The file is committed to GitHub and goes live after Vercel redeploys.</p><label for="musicFile">Choose audio file</label><input id="musicFile" class="music-file-input" type="file" accept=".mp3,.m4a,.ogg,.wav,audio/mpeg,audio/mp4,audio/ogg,audio/wav"><audio id="musicPreview" controls preload="none"></audio><div class="music-controls"><button type="button" id="uploadMusic">Upload to GitHub</button></div><div class="music-hint" id="musicUploadHint"></div></div>
+</div><p class="music-hint" id="musicStatus" role="status"></p></div>
+</section>
 <section class="panel"><h2>Candidate Editor & PNG Upload</h2><p class="muted">Changes appear on the connected voting website automatically. Maximum image size: 1 MB, PNG/JPEG/WebP.</p><div id="candidates" class="candidates"></div></section>
 <section class="panel"><div class="toolbar"><h2>Private Voter Records</h2><span class="muted">Name, email, age and selected candidate. Do not share publicly.</span></div><div class="scroll"><table><thead><tr><th>Voter</th><th>Email</th><th>Age</th><th>Candidate</th><th>Date</th></tr></thead><tbody id="voteRows"></tbody></table></div><div class="pagination"><button class="alt" id="prev">Previous</button><span id="page">Page 1</span><button class="alt" id="next">Next</button></div></section>
 <p class="status" id="status"></p></div></main><script>
@@ -15,12 +46,77 @@ async function refresh(){if(!authenticated)return;try{const [stats,candidates,vo
 $('voteRows').innerHTML=votes.map(v=>'<tr><td>'+esc(v.name)+'</td><td>'+esc(v.email)+'</td><td>'+esc(v.ageAtVote)+'</td><td>'+esc(v.candidate)+'</td><td>'+esc(new Date(v.castAt).toLocaleString())+'</td></tr>').join('')||'<tr><td colspan="5">No verified votes yet</td></tr>';
 $('candidates').innerHTML=candidates.map(c=>'<div class="candidate" data-id="'+c.id+'">'+(c.imageUrl?'<img src="'+esc(c.imageUrl)+'?v='+Date.now()+'" alt="Candidate symbol">':'<div class="icon">🗳️</div>')+'<label>Candidate '+c.id+' name</label><input class="name" value="'+esc(c.name)+'" maxlength="100"><label>Symbol</label><select class="symbol">'+['star','book','tree','lamp','wheel'].map(i=>'<option value="'+i+'" '+(c.symbol===i?'selected':'')+'>'+i+'</option>').join('')+'</select><label>Accent color</label><input type="color" class="color" value="'+esc(c.color)+'"><button class="save">Save Candidate</button><label>Upload image</label><input class="file" type="file" accept="image/png,image/jpeg,image/webp"><button class="upload alt">Upload PNG</button><button class="remove danger">Remove Image</button></div>').join('');
 }catch(e){message(e.message)}}
-$('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const form=new FormData(e.target);await api('admin/login',{method:'POST',body:JSON.stringify(Object.fromEntries(form))});authenticated=true;$('loginArea').classList.add('hide');$('adminArea').classList.remove('hide');$('adminName').textContent=form.get('email');refresh()}catch(err){$('loginError').textContent=err.message}};
+
+// Audio controls run only after the verified admin session is established.
+let musicPreviewObjectUrl=null, githubAudioEnabled=false;
+function audioNote(message,isError=false){
+ $('musicStatus').textContent=message;
+ $('musicStatus').classList.toggle('error',isError);
+}
+async function loadMusicSettings(){
+ try{
+  const settings=await api('admin/music');
+  githubAudioEnabled=Boolean(settings.githubUploadReady);
+  $('musicVolume').value=Number(settings.volume??35);
+  $('volumeValue').textContent=$('musicVolume').value+'%';
+  $('musicPreview').volume=Number($('musicVolume').value)/100;
+  $('activeMusicName').textContent=(settings.src||'/audio/background.mp3').split('/').pop();
+  $('musicInfo').textContent='Saved background volume: '+settings.volume+'%';
+  if(!musicPreviewObjectUrl){
+    $('musicPreview').src='https://ballet-paper-live.vercel.app'+(settings.src||'/audio/background.mp3')+(settings.updatedAt?'?v='+encodeURIComponent(settings.updatedAt):'');
+  }
+  $('uploadMusic').disabled=!githubAudioEnabled;
+  $('musicUploadHint').textContent=githubAudioEnabled?'GitHub publishing is connected. Upload commits audio to the live frontend repository.':'GitHub upload requires BALLOT_GITHUB_CONTENTS_TOKEN configured privately in Vercel.';
+  audioNote('Music settings loaded.');
+ }catch(err){audioNote('Could not load music settings: '+err.message,true);}
+}
+$('musicVolume').addEventListener('input',e=>{
+ $('volumeValue').textContent=e.target.value+'%';
+ $('musicPreview').volume=Number(e.target.value)/100;
+});
+$('saveMusicVolume').onclick=async()=>{
+ const button=$('saveMusicVolume');button.disabled=true;
+ try{
+   const volume=Number($('musicVolume').value);
+   const result=await api('admin/music',{method:'PUT',body:JSON.stringify({volume})});
+   $('musicInfo').textContent='Saved background volume: '+result.volume+'%';
+   audioNote('Volume saved. Connected visitors receive it within about 30 seconds.');
+ }catch(err){audioNote('Volume save failed: '+err.message,true);}
+ finally{button.disabled=false;}
+};
+$('musicFile').addEventListener('change',()=>{
+ const file=$('musicFile').files[0];
+ if(musicPreviewObjectUrl){URL.revokeObjectURL(musicPreviewObjectUrl);musicPreviewObjectUrl=null;}
+ if(file){
+  musicPreviewObjectUrl=URL.createObjectURL(file);
+  $('musicPreview').src=musicPreviewObjectUrl;
+  $('musicPreview').volume=Number($('musicVolume').value)/100;
+  audioNote('Preview selected track, then press Upload to GitHub.');
+ }
+});
+$('uploadMusic').onclick=async()=>{
+ const file=$('musicFile').files[0];
+ if(!file)return audioNote('Choose a music file first.',true);
+ if(file.size>2*1024*1024)return audioNote('File must be smaller than 2 MB.',true);
+ const button=$('uploadMusic');button.disabled=true;button.textContent='Uploading...';
+ try{
+  const encoded=await new Promise((resolve,reject)=>{
+   const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file);
+  });
+  const result=await api('admin/music/upload',{method:'POST',body:JSON.stringify({fileName:file.name,mime:file.type,base64:encoded})});
+  audioNote('Uploaded to GitHub. Your new track will go live when Vercel deployment finishes.');
+  $('activeMusicName').textContent=(result.src||'').split('/').pop();
+  $('musicFile').value='';
+  if(musicPreviewObjectUrl){URL.revokeObjectURL(musicPreviewObjectUrl);musicPreviewObjectUrl=null;}
+ }catch(err){audioNote('Music upload failed: '+err.message,true);}
+ finally{button.disabled=!githubAudioEnabled;button.textContent='Upload to GitHub';}
+};
+$('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const form=new FormData(e.target);await api('admin/login',{method:'POST',body:JSON.stringify(Object.fromEntries(form))});authenticated=true;$('loginArea').classList.add('hide');$('adminArea').classList.remove('hide');$('adminName').textContent=form.get('email');refresh();loadMusicSettings()}catch(err){$('loginError').textContent=err.message}};
 $('logout').onclick=async()=>{await api('admin/logout',{method:'POST'}).catch(()=>{});authenticated=false;$('adminArea').classList.add('hide');$('loginArea').classList.remove('hide')};
 $('prev').onclick=()=>{page=Math.max(1,page-1);refresh()};$('next').onclick=()=>{page++;refresh()};
 $('candidates').addEventListener('click',async e=>{const button=e.target.closest('button');if(!button)return;const card=button.closest('.candidate');const id=Number(card.dataset.id);try{if(button.classList.contains('save')){await api('admin/candidates/'+id,{method:'PUT',body:JSON.stringify({name:card.querySelector('.name').value,symbol:card.querySelector('.symbol').value,color:card.querySelector('.color').value})});message('Candidate updated')}
 else if(button.classList.contains('upload')){const file=card.querySelector('.file').files[0];if(!file)throw Error('Select an image first');if(file.size>1024*1024)throw Error('Image must be under 1 MB');if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('Unsupported image type');const encoded=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result.split(',')[1]);fr.onerror=reject;fr.readAsDataURL(file)});await api('admin/candidates/'+id+'/image',{method:'POST',body:JSON.stringify({base64:encoded,mime:file.type})});message('Image uploaded')}
 else if(button.classList.contains('remove')){await api('admin/candidates/'+id+'/image',{method:'DELETE'});message('Image removed')}else return;
 await refresh();}catch(err){message(err.message)}});
-api('admin/me').then(u=>{authenticated=true;$('adminName').textContent=u.email;$('loginArea').classList.add('hide');$('adminArea').classList.remove('hide');refresh()}).catch(()=>{});setInterval(()=>{if(authenticated)refresh()},15000);
+api('admin/me').then(u=>{authenticated=true;$('adminName').textContent=u.email;$('loginArea').classList.add('hide');$('adminArea').classList.remove('hide');refresh();loadMusicSettings()}).catch(()=>{});setInterval(()=>{if(authenticated)refresh()},15000);
 </script></body></html>
